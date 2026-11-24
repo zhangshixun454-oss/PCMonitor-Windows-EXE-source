@@ -3,19 +3,42 @@ name: PC Monitor - Windows EXE
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'windows/**'
-      - '.github/workflows/build-windows.yml'
+
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Publish Windows x64
-        run: dotnet publish windows/PCMonitor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
+
+      - name: Find and publish Windows project
+        shell: pwsh
+        run: |
+          Write-Host "Searching for PCMonitor.csproj..."
+          $projects = @(Get-ChildItem -Path . -Recurse -File -Filter PCMonitor.csproj)
+
+          if ($projects.Count -eq 0) {
+              Get-ChildItem -Path . -Recurse -File | Select-Object FullName
+              throw "PCMonitor.csproj not found. Please upload Windows source files."
+          }
+
+          if ($projects.Count -gt 1) {
+              $projects | Select-Object FullName
+              throw "Multiple PCMonitor projects found."
+          }
+
+          $project = $projects[0]
+          Write-Host "Project found: $($project.FullName)"
+
+          dotnet publish "$($project.FullName)" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
+
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: PCMonitor-Windows
